@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Debug Helper</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .token { word-break: break-all; background: #f5f5f5; padding: 10px; border-radius: 3px; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        .error { color: red; }
+        .success { color: green; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>Bearer Token Debug Helper</h1>
+    
+    <div class="section">
+        <h3>Local Storage Tokens</h3>
+        <div id="localStorage-tokens"></div>
+        <button onclick="checkLocalStorage()">Refresh Local Storage</button>
+        <button onclick="clearLocalStorage()">Clear All Auth Storage</button>
+    </div>
+    
+    <div class="section">
+        <h3>Test API Request</h3>
+        <button onclick="testApiRequest()">Test /auth/me Request</button>
+        <div id="api-result"></div>
+    </div>
+    
+    <div class="section">
+        <h3>NextAuth Session</h3>
+        <button onclick="checkNextAuthSession()">Check NextAuth Session</button>
+        <div id="nextauth-result"></div>
+    </div>
+    
+    <div class="section">
+        <h3>Console Logs</h3>
+        <p>Open browser developer tools (F12) to see detailed authentication logs from the application.</p>
+        <p>Look for logs starting with:</p>
+        <ul>
+            <li><code>[API Client]</code> - API client token handling</li>
+            <li><code>[Auth Provider]</code> - Authentication provider state changes</li>
+        </ul>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3001/api';
+        
+        function checkLocalStorage() {
+            const container = document.getElementById('localStorage-tokens');
+            const authToken = localStorage.getItem('auth-token');
+            const currentUser = localStorage.getItem('current-user');
+            const partnerBank = localStorage.getItem('partner-bank');
+            
+            let html = '';
+            
+            if (authToken) {
+                html += `<p><strong>Auth Token:</strong></p><div class="token">${authToken.substring(0, 50)}...</div>`;
+            } else {
+                html += '<p class="error">No auth token found in localStorage</p>';
+            }
+            
+            if (currentUser) {
+                html += `<p><strong>Current User:</strong></p><div class="token">${currentUser}</div>`;
+            } else {
+                html += '<p class="error">No current user found in localStorage</p>';
+            }
+            
+            if (partnerBank) {
+                html += `<p><strong>Partner Bank:</strong></p><div class="token">${partnerBank}</div>`;
+            } else {
+                html += '<p class="info">No partner bank found in localStorage</p>';
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        function clearLocalStorage() {
+            localStorage.removeItem('auth-token');
+            localStorage.removeItem('current-user');
+            localStorage.removeItem('partner-bank');
+            checkLocalStorage();
+            alert('Auth storage cleared!');
+        }
+        
+        async function testApiRequest() {
+            const container = document.getElementById('api-result');
+            const authToken = localStorage.getItem('auth-token');
+            
+            if (!authToken) {
+                container.innerHTML = '<p class="error">No auth token available for testing</p>';
+                return;
+            }
+            
+            try {
+                container.innerHTML = '<p class="info">Making API request...</p>';
+                
+                const response = await fetch(`${API_BASE_URL}/auth/me`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const responseText = await response.text();
+                let responseData;
+                try {
+                    responseData = JSON.parse(responseText);
+                } catch {
+                    responseData = responseText;
+                }
+                
+                let html = `<p><strong>Status:</strong> ${response.status} ${response.statusText}</p>`;
+                html += `<p><strong>Headers sent:</strong></p>`;
+                html += `<div class="token">Authorization: Bearer ${authToken.substring(0, 20)}...</div>`;
+                html += `<p><strong>Response:</strong></p>`;
+                html += `<div class="token">${JSON.stringify(responseData, null, 2)}</div>`;
+                
+                if (response.status === 401) {
+                    html += '<p class="error">❌ 401 Unauthorized - Token is invalid or expired</p>';
+                } else if (response.ok) {
+                    html += '<p class="success">✅ Request successful</p>';
+                } else {
+                    html += `<p class="error">❌ Request failed with status ${response.status}</p>`;
+                }
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                container.innerHTML = `<p class="error">Request failed: ${error.message}</p>`;
+            }
+        }
+        
+        async function checkNextAuthSession() {
+            const container = document.getElementById('nextauth-result');
+            
+            try {
+                const response = await fetch('/api/auth/session');
+                const session = await response.json();
+                
+                let html = `<p><strong>NextAuth Session:</strong></p>`;
+                html += `<div class="token">${JSON.stringify(session, null, 2)}</div>`;
+                
+                if (session && session.accessToken) {
+                    html += '<p class="success">✅ NextAuth session has access token</p>';
+                } else {
+                    html += '<p class="error">❌ NextAuth session missing or no access token</p>';
+                }
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                container.innerHTML = `<p class="error">Failed to check NextAuth session: ${error.message}</p>`;
+            }
+        }
+        
+        // Auto-load on page load
+        window.onload = function() {
+            checkLocalStorage();
+        };
+    </script>
+</body>
+</html>
